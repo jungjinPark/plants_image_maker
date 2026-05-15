@@ -1,0 +1,19 @@
+default_rules:
+  deciduous_hint_keywords: ["단풍", "낙엽", "가을색"]
+  evergreen_hint_keywords: ["상록", "항상 푸름"]
+  pruning_default: "필요시 경미한 전정"
+
+plants:
+  - korean_name: "산철쭉"
+    scientific_name: "Rhododendron yedoense var. poukhanense"
+    max_height_cm: 120
+    max_width_cm: 150
+    evergreen: false
+    flowering_months: [4, 5]
+    flower_color: "분홍"
+    fruit: false
+    autumn_color: "약함"
+    winter_interest: "가지 실루엣"
+    pruning_required: true
+    dwarf: true
+    form_features: "둥근 관목형, 촘촘한 가지"
