@@ -7,7 +7,6 @@ from typing import List
 
 import streamlit as st
 from PIL import Image, ImageDraw
-from rembg import remove
 from openai import OpenAI
 
 
@@ -51,8 +50,7 @@ def generate_season_plant_image(
 
         img_base64 = result.data[0].b64_json
         img_bytes = base64.b64decode(img_base64)
-        cleaned = remove(img_bytes)
-        return Image.open(io.BytesIO(cleaned)).convert("RGBA")
+        return Image.open(io.BytesIO(img_bytes)).convert("RGBA")
 
     except Exception as e:
         st.error(f"이미지 생성 실패: {e}")
