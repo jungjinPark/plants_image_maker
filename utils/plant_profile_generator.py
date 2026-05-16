@@ -12,20 +12,22 @@ from openai import OpenAI
 REQUIRED_KEYS = [
     "korean_name",
     "scientific_name",
-    "evergreen",
     "plant_type",
-    "growth_form",
-    "branching_structure",
-    "leaf_shape",
-    "flower_character",
-    "flowering_season",
-    "autumn_color",
-    "winter_silhouette",
+    "evergreen",
     "mature_height_cm",
     "mature_width_cm",
+    "growth_form",
+    "flower_season_months",
+    "flower_color",
+    "fruit_season_months",
+    "autumn_color",
+    "winter_feature",
+    "pruning_feature",
+    "seasonal_morphology",
     "visual_keywords",
-    "seasonal_characteristics",
 ]
+
+MORPH_KEYS = ["jan_feb", "mar_apr", "may_jun", "jul_aug", "sep_oct", "nov_dec"]
 
 
 def _get_openai_api_key() -> str | None:
@@ -47,30 +49,31 @@ def _fallback_profile(
     return {
         "korean_name": korean_name,
         "scientific_name": scientific_name or "학명 미상",
-        "evergreen": None,
         "plant_type": "shrub",
-        "growth_form": "자연스러운 수형, 예상 성숙 크기 반영",
-        "branching_structure": "중심 줄기 및 자연 분지 구조",
-        "leaf_shape": "종 특성에 맞는 일반적인 잎 형태",
-        "flower_character": "종 특성 기반 개화 양상",
-        "flowering_season": "spring_to_summer",
-        "autumn_color": "자연스러운 계절 색 변화",
-        "winter_silhouette": "가지 실루엣 또는 상록 질감",
+        "evergreen": False,
         "mature_height_cm": int(max_h_cm),
         "mature_width_cm": int(max_w_cm),
+        "growth_form": "자연스러운 수형, 예상 성숙 크기 반영",
+        "flower_season_months": [5, 6],
+        "flower_color": "종 특성 기반",
+        "fruit_season_months": [],
+        "autumn_color": "자연스러운 계절 색 변화",
+        "winter_feature": "가지 실루엣 또는 상록 질감",
+        "pruning_feature": "전정 전후 수형 안정",
+        "seasonal_morphology": {
+            "jan_feb": "동절기 휴면 또는 상록 잎 유지",
+            "mar_apr": "봄 신초 및 잎 전개 시작",
+            "may_jun": "왕성한 생장과 초기 개화 가능",
+            "jul_aug": "최대 잎량 및 수형 확장",
+            "sep_oct": "생장 둔화, 결실 또는 단풍 가능",
+            "nov_dec": "휴면 진입, 겨울 구조 강조",
+        },
         "visual_keywords": [
             korean_name,
             "realistic landscape architecture botanical rendering",
-            "actual shrub proportions",
+            "actual plant proportions",
             "transparent background",
         ],
-        "seasonal_characteristics": {
-            "spring": "새순 발아 및 연한 잎 전개",
-            "early_summer": "생장 활발, 잎 밀도 증가",
-            "summer": "최대 잎량과 안정적인 수형",
-            "autumn": "단풍 및 생장 둔화",
-            "winter": "낙엽 후 골격 또는 상록 유지",
-        },
     }
 
 
@@ -83,9 +86,9 @@ def merge_with_db_profile(base_profile: Dict[str, Any], db_record: Dict[str, Any
         "korean_name": db_record.get("korean_name"),
         "scientific_name": db_record.get("scientific_name"),
         "evergreen": db_record.get("evergreen"),
-        "flower_character": db_record.get("flower_color"),
+        "flower_color": db_record.get("flower_color"),
         "autumn_color": db_record.get("autumn_color"),
-        "winter_silhouette": db_record.get("winter_interest"),
+        "winter_feature": db_record.get("winter_interest"),
         "growth_form": db_record.get("form_features"),
     }
     for k, v in overrides.items():
@@ -93,10 +96,16 @@ def merge_with_db_profile(base_profile: Dict[str, Any], db_record: Dict[str, Any
             merged[k] = v
 
     if db_record.get("flowering_months"):
-        months = db_record["flowering_months"]
-        merged["flowering_season"] = f"{min(months)}~{max(months)}월"
+        merged["flower_season_months"] = db_record["flowering_months"]
 
     return merged
+
+
+def _normalize_month_list(value: Any, default: List[int]) -> List[int]:
+    if isinstance(value, list):
+        nums = [int(m) for m in value if str(m).isdigit() and 1 <= int(m) <= 12]
+        return nums or default
+    return default
 
 
 def _normalize_profile(raw: Dict[str, Any], fallback: Dict[str, Any]) -> Dict[str, Any]:
@@ -106,11 +115,26 @@ def _normalize_profile(raw: Dict[str, Any], fallback: Dict[str, Any]) -> Dict[st
         if value is not None and value != "":
             normalized[key] = value
 
-    if not isinstance(normalized.get("seasonal_characteristics"), dict):
-        normalized["seasonal_characteristics"] = fallback["seasonal_characteristics"]
+    morph = normalized.get("seasonal_morphology")
+    if not isinstance(morph, dict):
+        morph = {}
+    normalized["seasonal_morphology"] = {
+        k: str(morph.get(k) or fallback["seasonal_morphology"][k]) for k in MORPH_KEYS
+    }
 
     if not isinstance(normalized.get("visual_keywords"), list):
         normalized["visual_keywords"] = fallback["visual_keywords"]
+
+    normalized["flower_season_months"] = _normalize_month_list(
+        normalized.get("flower_season_months"), fallback["flower_season_months"]
+    )
+    normalized["fruit_season_months"] = _normalize_month_list(
+        normalized.get("fruit_season_months"), fallback["fruit_season_months"]
+    )
+
+    allowed_types = {"tree", "shrub", "grass", "perennial", "groundcover"}
+    if normalized.get("plant_type") not in allowed_types:
+        normalized["plant_type"] = fallback["plant_type"]
 
     return normalized
 
@@ -136,18 +160,20 @@ def generate_plant_profile(
         client = OpenAI(api_key=api_key)
         ref_hint = f"참고 이미지 개수: {len(reference_images)}장"
         prompt = (
-            "다음 식물 정보를 바탕으로 조경용 계절 일러스트 생성에 필요한 식물 프로필 JSON을 작성하세요. "
-            "모르면 추정하되 보수적으로 작성하세요.\n"
-            f"- 국명: {korean_name}\n"
-            f"- 학명: {scientific_name or '미입력'}\n"
-            f"- 최대크기: H {max_height_cm}cm, W {max_width_cm}cm\n"
-            f"- {ref_hint}\n\n"
-            "반드시 아래 키를 포함한 JSON 객체만 반환:\n"
+            "다음 식물 정보를 바탕으로 모든 식물군에 공통 적용 가능한 조경용 식물 프로필 JSON을 작성하세요. "
+            "추정이 필요하면 보수적으로 작성하세요.\\n"
+            f"- 국명: {korean_name}\\n"
+            f"- 학명: {scientific_name or '미입력'}\\n"
+            f"- 최대크기: H {max_height_cm}cm, W {max_width_cm}cm\\n"
+            f"- {ref_hint}\\n\\n"
+            "반드시 아래 키를 포함한 JSON 객체만 반환:\\n"
             + ", ".join(REQUIRED_KEYS)
-            + "\n"
-            "seasonal_characteristics는 spring/early_summer/summer/autumn/winter 키를 가진 객체로 작성. "
-            "식물형은 tree/shrub/grass/perennial/groundcover 중 하나. "
-            "반드시 strict JSON object만 반환."
+            + "\\n"
+            "제약:\\n"
+            "- plant_type은 tree/shrub/grass/perennial/groundcover 중 하나\\n"
+            "- flower_season_months, fruit_season_months는 월 숫자 배열(예: [4,5,6])\\n"
+            "- seasonal_morphology는 jan_feb, mar_apr, may_jun, jul_aug, sep_oct, nov_dec 키를 모두 포함\\n"
+            "- 반드시 strict JSON object만 반환"
         )
 
         user_content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
