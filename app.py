@@ -54,13 +54,9 @@ if generate:
         db_record=db_record,
     )
 
-    season_texts = build_seasonal_descriptions(
-        plant_name.strip(),
-        plant_profile,
-        plant_profile.get("evergreen"),
-    )
+    season_texts = build_seasonal_descriptions(plant_name.strip(), plant_profile)
 
-    with st.expander("생성된 식물 프로필", expanded=False):
+    with st.expander("생성된 식물 프로필 보기", expanded=False):
         st.json(plant_profile)
 
     base_prompt = (ROOT / "prompts" / "seasonal_prompt.txt").read_text(encoding="utf-8")
@@ -89,6 +85,7 @@ if generate:
         season_texts,
         max_h,
         max_w,
+        plant_profile,
     )
 
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
