@@ -60,7 +60,7 @@ def compose_final_board(
         max_w = x2 - x1 - 20
         max_h = y2 - y1 - 155
 
-        scale = min(max_w / max(plant_px_w, 1), max_h / max(plant_px_h, 1), 1.0)
+        scale = min(max_w / max(plant_px_w, 1), max_h / max(plant_px_h, 1))
         target_w = max(60, int(plant_px_w * scale))
         target_h = max(60, int(plant_px_h * scale))
 

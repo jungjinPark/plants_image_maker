@@ -15,8 +15,11 @@ SEASON_LABELS = [
 
 
 def load_growth_db(path: str) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return {}
 
 
 def find_plant_record(db: Dict[str, Any], korean_name: str, scientific_name: str | None = None) -> Dict[str, Any] | None:

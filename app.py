@@ -60,7 +60,7 @@ if generate:
         plant_profile.get("evergreen"),
     )
 
-    with st.expander("생성된 식물 프로필 보기", expanded=False):
+    with st.expander("생성된 식물 프로필", expanded=False):
         st.json(plant_profile)
 
     base_prompt = (ROOT / "prompts" / "seasonal_prompt.txt").read_text(encoding="utf-8")

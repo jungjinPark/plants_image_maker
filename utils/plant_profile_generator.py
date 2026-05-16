@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+import base64
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import streamlit as st
 from openai import OpenAI
@@ -12,16 +13,18 @@ REQUIRED_KEYS = [
     "korean_name",
     "scientific_name",
     "evergreen",
-    "form",
-    "branch_structure",
+    "plant_type",
+    "growth_form",
+    "branching_structure",
     "leaf_shape",
-    "flowering_period",
-    "flower_color",
-    "has_fruit",
-    "autumn_characteristics",
-    "winter_interest",
-    "seasonal_growth",
+    "flower_character",
+    "flowering_season",
+    "autumn_color",
+    "winter_silhouette",
+    "mature_height_cm",
+    "mature_width_cm",
     "visual_keywords",
+    "seasonal_characteristics",
 ]
 
 
@@ -45,29 +48,29 @@ def _fallback_profile(
         "korean_name": korean_name,
         "scientific_name": scientific_name or "학명 미상",
         "evergreen": None,
-        "form": f"자연스러운 수형, 예상 성숙 크기 H {int(max_h_cm)}cm / W {int(max_w_cm)}cm",
-        "branch_structure": "중심 줄기와 자연 분지 구조",
+        "plant_type": "shrub",
+        "growth_form": "자연스러운 수형, 예상 성숙 크기 반영",
+        "branching_structure": "중심 줄기 및 자연 분지 구조",
         "leaf_shape": "종 특성에 맞는 일반적인 잎 형태",
-        "flowering_period": "봄~여름 가능성",
-        "flower_color": "식물 고유 색",
-        "has_fruit": None,
-        "autumn_characteristics": "계절 변화에 따른 자연스러운 색 변화",
-        "winter_interest": "가지 실루엣 또는 상록 질감",
-        "seasonal_growth": {
-            "1_2": "휴면기 또는 생장 둔화",
-            "3_4": "새순 전개 시작",
-            "5_6": "생장 활발 및 개화 가능",
-            "7_8": "수관 확장 및 잎 밀도 증가",
-            "9_10": "가을 색 변화 및 생장 안정화",
-            "11_12": "낙엽 또는 상록 질감 유지",
-        },
+        "flower_character": "종 특성 기반 개화 양상",
+        "flowering_season": "spring_to_summer",
+        "autumn_color": "자연스러운 계절 색 변화",
+        "winter_silhouette": "가지 실루엣 또는 상록 질감",
+        "mature_height_cm": int(max_h_cm),
+        "mature_width_cm": int(max_w_cm),
         "visual_keywords": [
             korean_name,
-            "botanical illustration",
-            "single plant",
+            "realistic landscape architecture botanical rendering",
+            "actual shrub proportions",
             "transparent background",
-            "seasonal change",
         ],
+        "seasonal_characteristics": {
+            "spring": "새순 발아 및 연한 잎 전개",
+            "early_summer": "생장 활발, 잎 밀도 증가",
+            "summer": "최대 잎량과 안정적인 수형",
+            "autumn": "단풍 및 생장 둔화",
+            "winter": "낙엽 후 골격 또는 상록 유지",
+        },
     }
 
 
@@ -80,11 +83,10 @@ def merge_with_db_profile(base_profile: Dict[str, Any], db_record: Dict[str, Any
         "korean_name": db_record.get("korean_name"),
         "scientific_name": db_record.get("scientific_name"),
         "evergreen": db_record.get("evergreen"),
-        "flower_color": db_record.get("flower_color"),
-        "has_fruit": db_record.get("fruit"),
-        "autumn_characteristics": db_record.get("autumn_color"),
-        "winter_interest": db_record.get("winter_interest"),
-        "form": db_record.get("form_features"),
+        "flower_character": db_record.get("flower_color"),
+        "autumn_color": db_record.get("autumn_color"),
+        "winter_silhouette": db_record.get("winter_interest"),
+        "growth_form": db_record.get("form_features"),
     }
     for k, v in overrides.items():
         if v is not None and v != "":
@@ -92,7 +94,7 @@ def merge_with_db_profile(base_profile: Dict[str, Any], db_record: Dict[str, Any
 
     if db_record.get("flowering_months"):
         months = db_record["flowering_months"]
-        merged["flowering_period"] = f"{min(months)}~{max(months)}월"
+        merged["flowering_season"] = f"{min(months)}~{max(months)}월"
 
     return merged
 
@@ -104,8 +106,8 @@ def _normalize_profile(raw: Dict[str, Any], fallback: Dict[str, Any]) -> Dict[st
         if value is not None and value != "":
             normalized[key] = value
 
-    if not isinstance(normalized.get("seasonal_growth"), dict):
-        normalized["seasonal_growth"] = fallback["seasonal_growth"]
+    if not isinstance(normalized.get("seasonal_characteristics"), dict):
+        normalized["seasonal_characteristics"] = fallback["seasonal_characteristics"]
 
     if not isinstance(normalized.get("visual_keywords"), list):
         normalized["visual_keywords"] = fallback["visual_keywords"]
@@ -116,13 +118,14 @@ def _normalize_profile(raw: Dict[str, Any], fallback: Dict[str, Any]) -> Dict[st
 def generate_plant_profile(
     korean_name: str,
     scientific_name: str | None,
-    max_h_cm: float,
-    max_w_cm: float,
-    reference_images: List[bytes],
+    max_height_cm: float,
+    max_width_cm: float,
+    reference_images: Optional[List[bytes]] = None,
     db_record: Dict[str, Any] | None = None,
     model: str = "gpt-4.1-mini",
 ) -> Dict[str, Any]:
-    fallback = _fallback_profile(korean_name, scientific_name, max_h_cm, max_w_cm)
+    reference_images = reference_images or []
+    fallback = _fallback_profile(korean_name, scientific_name, max_height_cm, max_width_cm)
 
     api_key = _get_openai_api_key()
     if not api_key:
@@ -137,20 +140,30 @@ def generate_plant_profile(
             "모르면 추정하되 보수적으로 작성하세요.\n"
             f"- 국명: {korean_name}\n"
             f"- 학명: {scientific_name or '미입력'}\n"
-            f"- 최대크기: H {max_h_cm}cm, W {max_w_cm}cm\n"
+            f"- 최대크기: H {max_height_cm}cm, W {max_width_cm}cm\n"
             f"- {ref_hint}\n\n"
             "반드시 아래 키를 포함한 JSON 객체만 반환:\n"
             + ", ".join(REQUIRED_KEYS)
             + "\n"
-            "seasonal_growth는 1_2,3_4,5_6,7_8,9_10,11_12 키를 가진 객체, "
-            "visual_keywords는 문자열 리스트로 작성."
+            "seasonal_characteristics는 spring/early_summer/summer/autumn/winter 키를 가진 객체로 작성. "
+            "식물형은 tree/shrub/grass/perennial/groundcover 중 하나. "
+            "반드시 strict JSON object만 반환."
         )
+
+        user_content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+        for img in reference_images[:4]:
+            user_content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{base64.b64encode(img).decode('utf-8')}"},
+                }
+            )
 
         res = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": "You are a botanically informed landscape assistant. Return strict JSON only."},
-                {"role": "user", "content": prompt},
+                {"role": "system", "content": "You are a botanical and landscape architecture expert. Output strict JSON only."},
+                {"role": "user", "content": user_content},
             ],
             response_format={"type": "json_object"},
             temperature=0.2,
