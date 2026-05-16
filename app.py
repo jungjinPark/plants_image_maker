@@ -63,11 +63,17 @@ if generate:
         img.save(OUTPUT_DIR / f"season_{idx+1:02d}.png")
 
     template = load_template(str(ROOT / "assets" / "blank_template.png"))
-    person_path = str(ROOT / "assets" / "person_silhouette.png")
-    if not Path(person_path).exists():
-        st.warning("person_silhouette.png가 없어 템플릿/대체 박스로 표시합니다.")
-
-    final_img = compose_final_board(template, person_path, season_images, SEASON_LABELS, season_texts, max_h, max_w)
+    # 사람 실루엣은 blank_template.png 안에 이미 포함되어 있으므로
+# 별도 person_silhouette.png를 사용하지 않는다.
+final_img = compose_final_board(
+    template,
+    None,
+    season_images,
+    SEASON_LABELS,
+    season_texts,
+    max_h,
+    max_w,
+)
 
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     out_png = OUTPUT_DIR / f"seasonal_board_{ts}.png"
