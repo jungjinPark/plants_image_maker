@@ -47,11 +47,8 @@ def compose_final_board(
     ratio = plant_h_cm / 175.0
     person_px_h = 520  # 템플릿 내 1.75m 사람 기준 높이
     plant_px_h = int(person_px_h * ratio)
-    plant_px_h = max(60, min(760, plant_px_h))
-    plant_px_w = max(
-        60,
-        int(plant_px_h * max(0.3, min(2.5, plant_w_cm / max(plant_h_cm, 1))))
-    )
+    plant_px_h = max(80, min(900, plant_px_h))
+    plant_px_w = max(80, int(plant_px_h * max(0.3, min(2.5, plant_w_cm / max(plant_h_cm, 1)))))
 
     for i, box in enumerate(SEASON_BOXES):
         x1, y1, x2, y2 = box
@@ -60,12 +57,14 @@ def compose_final_board(
         img = season_images[i].copy().convert("RGBA")
 
         # 식물 높이를 사람 기준으로 조정하되, 각 계절 칸 안에 들어가도록 제한
-        max_w = x2 - x1 - 30
-        max_h = y2 - y1 - 170
-        target_h = min(plant_px_h, max_h)
-        target_w = min(plant_px_w, max_w)
+        max_w = x2 - x1 - 20
+        max_h = y2 - y1 - 155
 
-        img.thumbnail((target_w, target_h))
+        scale = min(max_w / max(plant_px_w, 1), max_h / max(plant_px_h, 1), 1.0)
+        target_w = max(60, int(plant_px_w * scale))
+        target_h = max(60, int(plant_px_h * scale))
+
+        img = img.resize((target_w, target_h))
 
         ix = x1 + ((x2 - x1 - img.width) // 2)
         iy = y2 - 180 - img.height
