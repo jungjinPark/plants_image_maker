@@ -49,54 +49,85 @@ if generate:
         "max_width_cm": max_w,
     })
 
-    season_texts = build_seasonal_descriptions(plant_name.strip(), record, record.get("evergreen"))
-    base_prompt = (ROOT / "prompts" / "seasonal_prompt.txt").read_text(encoding="utf-8")
+    season_texts = build_seasonal_descriptions(
+        plant_name.strip(),
+        record,
+        record.get("evergreen")
+    )
+
+    base_prompt = (
+        ROOT / "prompts" / "seasonal_prompt.txt"
+    ).read_text(encoding="utf-8")
+
     ref_bytes = [f.getvalue() for f in refs] if refs else []
 
     season_images = []
     prompt_log = {}
+
     for idx, label in enumerate(SEASON_LABELS):
-        prompt = build_image_prompt(base_prompt, record, label, season_texts[idx], len(ref_bytes))
+        prompt = build_image_prompt(
+            base_prompt,
+            record,
+            label,
+            season_texts[idx],
+            len(ref_bytes)
+        )
+
         prompt_log[f"season_{idx+1:02d}"] = prompt
+
         img = generate_season_plant_image(prompt, ref_bytes)
+
         season_images.append(img)
+
         img.save(OUTPUT_DIR / f"season_{idx+1:02d}.png")
 
-    template = load_template(str(ROOT / "assets" / "blank_template.png"))
-    # 사람 실루엣은 blank_template.png 안에 이미 포함되어 있으므로
-# 별도 person_silhouette.png를 사용하지 않는다.
-final_img = compose_final_board(
-    template,
-    None,
-    season_images,
-    SEASON_LABELS,
-    season_texts,
-    max_h,
-    max_w,
-)
-
-ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-out_png = OUTPUT_DIR / f"seasonal_board_{ts}.png"
-out_prompt = OUTPUT_DIR / f"prompts_{ts}.txt"
-out_history = OUTPUT_DIR / "history.jsonl"
-
-final_img.save(out_png)
-out_prompt.write_text("\n\n".join([f"[{k}]\n{v}" for k, v in prompt_log.items()]), encoding="utf-8")
-
-with open(out_history, "a", encoding="utf-8") as f:
-    f.write(json.dumps({
-        "timestamp": ts,
-        "plant": record,
-        "output": out_png.name
-    }, ensure_ascii=False) + "\n")
-
-st.subheader("최종 결과")
-st.image(str(out_png), caption=out_png.name, use_container_width=True)
-
-with open(out_png, "rb") as f:
-    st.download_button(
-        "PNG 다운로드",
-        data=f,
-        file_name=out_png.name,
-        mime="image/png"
+    template = load_template(
+        str(ROOT / "assets" / "blank_template.png")
     )
+
+    # 사람 실루엣은 템플릿 내부 포함
+    final_img = compose_final_board(
+        template,
+        None,
+        season_images,
+        SEASON_LABELS,
+        season_texts,
+        max_h,
+        max_w,
+    )
+
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+
+    out_png = OUTPUT_DIR / f"seasonal_board_{ts}.png"
+    out_prompt = OUTPUT_DIR / f"prompts_{ts}.txt"
+    out_history = OUTPUT_DIR / "history.jsonl"
+
+    final_img.save(out_png)
+
+    out_prompt.write_text(
+        "\n\n".join([f"[{k}]\n{v}" for k, v in prompt_log.items()]),
+        encoding="utf-8"
+    )
+
+    with open(out_history, "a", encoding="utf-8") as f:
+        f.write(json.dumps({
+            "timestamp": ts,
+            "plant": record,
+            "output": out_png.name
+        }, ensure_ascii=False) + "\n")
+
+    st.subheader("최종 결과")
+
+    st.image(
+        str(out_png),
+        caption=out_png.name,
+        use_container_width=True
+    )
+
+    with open(out_png, "rb") as f:
+        st.download_button(
+            "PNG 다운로드",
+            data=f,
+            file_name=out_png.name,
+            mime="image/png"
+        )
