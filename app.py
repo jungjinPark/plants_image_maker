@@ -75,17 +75,28 @@ final_img = compose_final_board(
     max_w,
 )
 
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    out_png = OUTPUT_DIR / f"seasonal_board_{ts}.png"
-    out_prompt = OUTPUT_DIR / f"prompts_{ts}.txt"
-    out_history = OUTPUT_DIR / "history.jsonl"
+ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+out_png = OUTPUT_DIR / f"seasonal_board_{ts}.png"
+out_prompt = OUTPUT_DIR / f"prompts_{ts}.txt"
+out_history = OUTPUT_DIR / "history.jsonl"
 
-    final_img.save(out_png)
-    out_prompt.write_text("\n\n".join([f"[{k}]\n{v}" for k, v in prompt_log.items()]), encoding="utf-8")
-    with open(out_history, "a", encoding="utf-8") as f:
-        f.write(json.dumps({"timestamp": ts, "plant": record, "output": out_png.name}, ensure_ascii=False) + "\n")
+final_img.save(out_png)
+out_prompt.write_text("\n\n".join([f"[{k}]\n{v}" for k, v in prompt_log.items()]), encoding="utf-8")
 
-    st.subheader("최종 결과")
-    st.image(str(out_png), caption=out_png.name, use_container_width=True)
-    with open(out_png, "rb") as f:
-        st.download_button("PNG 다운로드", data=f, file_name=out_png.name, mime="image/png")
+with open(out_history, "a", encoding="utf-8") as f:
+    f.write(json.dumps({
+        "timestamp": ts,
+        "plant": record,
+        "output": out_png.name
+    }, ensure_ascii=False) + "\n")
+
+st.subheader("최종 결과")
+st.image(str(out_png), caption=out_png.name, use_container_width=True)
+
+with open(out_png, "rb") as f:
+    st.download_button(
+        "PNG 다운로드",
+        data=f,
+        file_name=out_png.name,
+        mime="image/png"
+    )
